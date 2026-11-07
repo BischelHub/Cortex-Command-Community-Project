@@ -49,8 +49,8 @@ void GraphicalPrimitive::DrawTiled(BITMAP* drawScreen, const Vector& targetPos) 
 
 	float bitmapWidth = g_SceneMan.GetSceneWidth();
 	float bitmapHeight = g_SceneMan.GetSceneHeight();
-	float areaToCoverX = drawScreen->w + g_SceneMan.GetTerrain()->GetOffset().m_X;
-	float areaToCoverY = drawScreen->h + g_SceneMan.GetTerrain()->GetOffset().m_Y;
+	float areaToCoverX = static_cast<float>(drawScreen->w) * s_DrawZoom + g_SceneMan.GetTerrain()->GetOffset().m_X;
+	float areaToCoverY = static_cast<float>(drawScreen->h) * s_DrawZoom + g_SceneMan.GetTerrain()->GetOffset().m_Y;
 
 	for (int tiledOffsetX = 0; tiledOffsetX < areaToCoverX;) {
 		float destX = tiledOffsetX - tiledTarget.m_X;
@@ -74,16 +74,13 @@ void GraphicalPrimitive::DrawTiled(BITMAP* drawScreen, const Vector& targetPos) 
 void LinePrimitive::Draw(BITMAP* drawScreen, const Vector& targetPos) {
 	Vector drawStart = WrapCoordinates(targetPos, m_StartPos);
 	Vector drawEnd = WrapCoordinates(targetPos, m_EndPos);
-	DrawLineEx(drawStart, drawEnd, m_Thickness, {m_Color, 0, 0, 255});
+	DrawLineEx(drawStart, drawEnd, m_Thickness * s_DrawZoom, {m_Color, 0, 0, 255});
 }
 
 void ArcPrimitive::Draw(BITMAP* drawScreen, const Vector& targetPos) {
 	Vector drawStart = WrapCoordinates(targetPos, m_StartPos);
-	if (m_Thickness > 1) {
-		DrawRing(drawStart, m_Radius - (m_Thickness / 2.0f), m_Radius + (m_Thickness / 2.0f), m_StartAngle, m_EndAngle, std::abs(m_EndAngle - m_StartAngle), {m_Color, 0, 0, 255});
-	} else {
-		DrawRing(drawStart, m_Radius - 0.5f, m_Radius + 0.5f, m_StartAngle, m_EndAngle, std::abs(m_EndAngle - m_StartAngle), {m_Color, 0, 0, 255});
-	}
+	float halfThickness = (m_Thickness > 1 ? m_Thickness / 2.0f : 0.5f) * s_DrawZoom;
+	DrawRing(drawStart, m_Radius - halfThickness, m_Radius + halfThickness, m_StartAngle, m_EndAngle, std::abs(m_EndAngle - m_StartAngle), {m_Color, 0, 0, 255});
 }
 
 void SplinePrimitive::Draw(BITMAP* drawScreen, const Vector& targetPos) {
@@ -240,13 +237,13 @@ void TextPrimitive::Draw(BITMAP* drawScreen, const Vector& targetPos) {
 		return;
 	}
 
-	Vector drawStart = WrapCoordinates(targetPos, m_StartPos) - m_TargetPosAlignment;
+	Vector drawStart = WrapCoordinates(targetPos, m_StartPos) - m_TargetPosAlignment * s_DrawZoom;
 	Rectangle bitmapRect(0.0f, 0.0f, m_TextBitmap->w, m_TextBitmap->h);
 	Rectangle destRect(
 		drawStart.m_X,
 		drawStart.m_Y,
-		m_TextBitmap->w,
-		m_TextBitmap->h);
+		m_TextBitmap->w * s_DrawZoom,
+		m_TextBitmap->h * s_DrawZoom);
 	DrawTexturePro(m_TextBitmap, bitmapRect, destRect, {0.0f, 0.0f}, m_RotAngle, {255, 255, 255, 255});
 }
 
@@ -265,10 +262,10 @@ void BitmapPrimitive::Draw(BITMAP* drawScreen, const Vector& targetPos) {
 	Vector drawStart = WrapCoordinates(targetPos, m_StartPos);
 
 	Rectangle flippedRect(
-		drawStart.m_X - m_Bitmap->w / 2,
-		drawStart.m_Y - m_Bitmap->h / 2,
-		(m_VFlipped ? -m_Bitmap->w : m_Bitmap->w) * m_Scale,
-		(m_HFlipped ? -m_Bitmap->h : m_Bitmap->h) * m_Scale
+		drawStart.m_X - (m_Bitmap->w / 2) * s_DrawZoom,
+		drawStart.m_Y - (m_Bitmap->h / 2) * s_DrawZoom,
+		(m_VFlipped ? -m_Bitmap->w : m_Bitmap->w) * m_Scale * s_DrawZoom,
+		(m_HFlipped ? -m_Bitmap->h : m_Bitmap->h) * m_Scale * s_DrawZoom
 	);
 
 	DrawTexturePro(m_Bitmap, Rectangle(0.0f, 0.0f, m_Bitmap->w, m_Bitmap->h), flippedRect, {0.0f, 0.0f}, m_RotAngle, {255, 255, 255, 255});

@@ -476,7 +476,8 @@ namespace RTE {
 		/// @param targetPos The absolute position of the target bitmap's upper left corner in the scene. (default: Vector())
 		/// @param which Which player's screen is being drawn. Tis affects which actor's HUDs (default: 0)
 		/// get drawn.
-		void DrawHUD(BITMAP* pTargetBitmap, const Vector& targetPos = Vector(), int which = 0, bool playerControlled = false);
+		/// @param zoom How far the view is zoomed out (scene pixels per pixel of the target bitmap). The HUDs keep their size, each is drawn where its object is on the zoomed out view. (default: 1)
+		void DrawHUD(BITMAP* pTargetBitmap, const Vector& targetPos = Vector(), int which = 0, bool playerControlled = false, float zoom = 1.0F);
 
 		/// Verifieis whether all elements of MOID index has correct ID. Should be used in Debug mode only.
 		void VerifyMOIDIndex();

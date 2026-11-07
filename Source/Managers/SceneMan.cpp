@@ -2558,7 +2558,12 @@ void SceneMan::Update(int screenId) {
 	terrain->Update();
 
 	// Background layers may scroll in fractions of the real offset and need special care to avoid jumping after having traversed wrapped edges, so they need the total offset without taking wrapping into account.
-	const Vector& unwrappedOffset = g_CameraMan.GetUnwrappedOffset(screenId);
+	// They are drawn at their own size when the view is zoomed out, so they need the offset of an unzoomed view around the same middle.
+	Vector unwrappedOffset = g_CameraMan.GetUnwrappedOffset(screenId);
+	if (float zoom = g_CameraMan.GetZoom(screenId); zoom != 1.0F) {
+		Vector unzoomedSize(static_cast<float>(g_FrameMan.GetPlayerFrameBufferWidth(screenId)), static_cast<float>(g_FrameMan.GetPlayerFrameBufferHeight(screenId)));
+		unwrappedOffset += (unzoomedSize * zoom - unzoomedSize) / 2;
+	}
 	for (SLBackground* backgroundLayer: m_pCurrentScene->GetBackLayers()) {
 		backgroundLayer->SetOffset(unwrappedOffset);
 		backgroundLayer->Update();
@@ -2576,7 +2581,7 @@ void SceneMan::Update(int screenId) {
 	}
 }
 
-void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos, bool skipBackgroundLayers, bool skipTerrain) {
+void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos, bool skipBackgroundLayers, bool skipTerrain, float zoom) {
 	ZoneScoped;
 
 	if (!m_pCurrentScene) {
@@ -2584,31 +2589,58 @@ void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector&
 	}
 
 	SLTerrain* terrain = m_pCurrentScene->GetTerrain();
+	m_DrawZoom = zoom;
 
 	// Set up the target box to draw to on the target bitmap, if it is larger than the scene in either dimension.
-	Box targetBox(Vector(), static_cast<float>(targetBitmap->w), static_cast<float>(targetBitmap->h));
-	Box targetDimensions(Vector(), targetBitmap->w, targetBitmap->h);
+	// The scene is drawn over the part of it the zoomed out view shows (and scaled down to the bitmap), the background layers over the bitmap itself.
+	auto setUpTargetBoxes = [this, terrain](int width, int height, Box& targetBox, Box& targetDimensions) {
+		targetBox = Box(Vector(), static_cast<float>(width), static_cast<float>(height));
+		targetDimensions = Box(Vector(), static_cast<float>(width), static_cast<float>(height));
+		if (!terrain->WrapsX() && width > GetSceneWidth()) {
+			targetBox.SetCorner(Vector(static_cast<float>((width - GetSceneWidth())) / 2, targetBox.GetCorner().GetY()));
+			targetBox.SetWidth(static_cast<float>(GetSceneWidth()));
+		}
+		if (!terrain->WrapsY() && height > GetSceneHeight()) {
+			targetBox.SetCorner(Vector(targetBox.GetCorner().GetX(), static_cast<float>((height - GetSceneHeight())) / 2));
+			targetBox.SetHeight(static_cast<float>(GetSceneHeight()));
+		}
+	};
+	bool zoomed = zoom != 1.0F;
+	Box targetBox;
+	Box targetDimensions;
+	setUpTargetBoxes(zoomed ? static_cast<int>(std::ceil(static_cast<float>(targetBitmap->w) * zoom)) : targetBitmap->w, zoomed ? static_cast<int>(std::ceil(static_cast<float>(targetBitmap->h) * zoom)) : targetBitmap->h, targetBox, targetDimensions);
+	Box backgroundTargetBox;
+	Box backgroundTargetDimensions;
+	setUpTargetBoxes(targetBitmap->w, targetBitmap->h, backgroundTargetBox, backgroundTargetDimensions);
 
-	if (!terrain->WrapsX() && targetBitmap->w > GetSceneWidth()) {
-		targetBox.SetCorner(Vector(static_cast<float>((targetBitmap->w - GetSceneWidth())) / 2, targetBox.GetCorner().GetY()));
-		targetBox.SetWidth(static_cast<float>(GetSceneWidth()));
-	}
-	if (!terrain->WrapsY() && targetBitmap->h > GetSceneHeight()) {
-		targetBox.SetCorner(Vector(targetBox.GetCorner().GetX(), static_cast<float>((targetBitmap->h - GetSceneHeight())) / 2));
-		targetBox.SetHeight(static_cast<float>(GetSceneHeight()));
-	}
+	// Draws what follows that much smaller, from the upper left corner of the view.
+	auto beginZoom = [zoomed, zoom]() {
+		if (zoomed) {
+			rlDrawRenderBatchActive();
+			rlScalef(1.0F / zoom, 1.0F / zoom, 1.0F);
+		}
+	};
+	auto endZoom = [zoomed]() {
+		if (zoomed) {
+			rlDrawRenderBatchActive();
+			rlLoadIdentity();
+		}
+	};
 
 	switch (m_LayerDrawMode) {
 		case LayerDrawMode::g_LayerTerrainMatter:
 			terrain->SetLayerToDraw(SLTerrain::LayerType::MaterialLayer);
+			beginZoom();
 			terrain->Draw(targetDimensions, targetBox);
+			endZoom();
 			break;
 		default:
 			if (!skipBackgroundLayers) {
 				for (std::list<SLBackground*>::reverse_iterator backgroundLayer = m_pCurrentScene->GetBackLayers().rbegin(); backgroundLayer != m_pCurrentScene->GetBackLayers().rend(); ++backgroundLayer) {
-					(*backgroundLayer)->Draw(targetDimensions, targetBox);
+					(*backgroundLayer)->Draw(backgroundTargetDimensions, backgroundTargetBox);
 				}
 			}
+			beginZoom();
 			if (!skipTerrain) {
 				terrain->SetLayerToDraw(SLTerrain::LayerType::BackgroundLayer);
 				terrain->Draw(targetDimensions, targetBox);
@@ -2623,10 +2655,11 @@ void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector&
 			if (SceneLayer* unseenLayer = (teamId != Activity::NoTeam) ? m_pCurrentScene->GetUnseenLayer(teamId) : nullptr) {
 				unseenLayer->Draw(targetDimensions, targetBox);
 			}
+			endZoom();
 
 			bool shouldDrawHUD = !g_FrameMan.IsHudDisabled(m_LastUpdatedScreen);
 			if (shouldDrawHUD) {
-				g_MovableMan.DrawHUD(targetGUIBitmap, targetPos, m_LastUpdatedScreen);
+				g_MovableMan.DrawHUD(targetGUIBitmap, targetPos, m_LastUpdatedScreen, false, zoom);
 			}
 
 			if (shouldDrawHUD) {
@@ -2659,11 +2692,14 @@ void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector&
 			}
 
 			if (m_pDebugLayer) {
+				beginZoom();
 				m_pDebugLayer->Draw(targetDimensions, targetBox);
+				endZoom();
 			}
 
 			break;
 	}
+	m_DrawZoom = 1.0F;
 }
 
 void SceneMan::ClearMOColorLayer() {

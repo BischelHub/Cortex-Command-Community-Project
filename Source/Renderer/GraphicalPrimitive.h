@@ -51,6 +51,9 @@ namespace RTE {
 		std::array<int, 4> m_ColorChannelBlendAmounts = {BlendAmountLimits::MinBlend, BlendAmountLimits::MinBlend, BlendAmountLimits::MinBlend, BlendAmountLimits::MinBlend}; //!< The blending amount for each color channel when drawing in blended mode.
 		float m_Depth{c_PrimitiveDepth};
 
+		/// How far the view the primitives are being drawn on is zoomed out (PrimitiveMan::DrawPrimitives sets it). They are drawn that much smaller, as the scene is, but text, bitmaps and line thickness keep their size.
+		static inline float s_DrawZoom = 1.0F;
+
 		/// Destructor method used to clean up a GraphicalPrimitive object before deletion from system memory.
 		virtual ~GraphicalPrimitive() = default;
 

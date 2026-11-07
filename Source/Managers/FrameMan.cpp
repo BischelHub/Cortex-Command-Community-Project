@@ -858,6 +858,10 @@ void FrameMan::Draw() {
 		g_SceneMan.Update(playerScreen);
 
 		Vector targetPos = g_CameraMan.GetOffset(playerScreen);
+		// How far this screen is zoomed out: it shows this many scene pixels per pixel of its own.
+		float zoom = g_CameraMan.GetZoom(playerScreen);
+		int viewWidth = zoom == 1.0F ? drawScreen->w : static_cast<int>(std::ceil(static_cast<float>(drawScreen->w) * zoom));
+		int viewHeight = zoom == 1.0F ? drawScreen->h : static_cast<int>(std::ceil(static_cast<float>(drawScreen->h) * zoom));
 
 		// Adjust the drawing position on the target screen for if the target screen is larger than the scene in non-wrapping dimension.
 		// Scene needs to be displayed centered on the target bitmap then, and that has to be adjusted for when drawing to the screen
@@ -869,14 +873,34 @@ void FrameMan::Draw() {
 		}
 
 		// Draw the scene
-		g_SceneMan.Draw(drawScreen, drawScreenGUI, targetPos);
+		g_SceneMan.Draw(drawScreen, drawScreenGUI, targetPos, false, false, zoom);
 
-		g_PrimitiveMan.DrawPrimitives(playerScreen, drawScreenGUI, targetPos);
+		// The primitives are drawn as small as the scene on a zoomed out screen.
+		if (zoom != 1.0F) {
+			rlDrawRenderBatchActive();
+			rlScalef(1.0F / zoom, 1.0F / zoom, 1.0F);
+		}
+		g_PrimitiveMan.DrawPrimitives(playerScreen, drawScreenGUI, targetPos, zoom);
+		if (zoom != 1.0F) {
+			rlDrawRenderBatchActive();
+			rlLoadIdentity();
+		}
 
 		// Get only the scene-relative post effects that affect this player's screen
 		if (pActivity) {
-			g_PostProcessMan.GetPostScreenEffectsWrapped(targetPos, drawScreen->w, drawScreen->h, screenRelativeEffects, pActivity->GetTeamOfPlayer(pActivity->PlayerOfScreen(playerScreen)));
-			g_PostProcessMan.GetGlowAreasWrapped(targetPos, drawScreen->w, drawScreen->h, screenRelativeGlowBoxes);
+			g_PostProcessMan.GetPostScreenEffectsWrapped(targetPos, viewWidth, viewHeight, screenRelativeEffects, pActivity->GetTeamOfPlayer(pActivity->PlayerOfScreen(playerScreen)));
+			g_PostProcessMan.GetGlowAreasWrapped(targetPos, viewWidth, viewHeight, screenRelativeGlowBoxes);
+			if (zoom != 1.0F) {
+				for (PostEffect& postEffect: screenRelativeEffects) {
+					postEffect.m_Pos /= zoom;
+					postEffect.m_Scale /= zoom;
+				}
+				for (Box& glowBox: screenRelativeGlowBoxes) {
+					glowBox.SetCorner(glowBox.GetCorner() / zoom);
+					glowBox.SetWidth(glowBox.GetWidth() / zoom);
+					glowBox.SetHeight(glowBox.GetHeight() / zoom);
+				}
+			}
 		}
 
 		// TODO: Find out what keeps disabling the clipping on the draw bitmap

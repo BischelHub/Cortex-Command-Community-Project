@@ -26,6 +26,7 @@ namespace RTE {
 		float m_Angle = 0.0F; // Post effect angle in radians.
 		int m_Strength = 128; //!< Scalar float for how hard to blend it in, 0 - 255.
 		Vector m_Pos; //!< Post effect position. Can be relative to the scene, or to the screen, depending on context.
+		float m_Scale = 1.0F; //!< How much smaller or larger to draw it, as on a zoomed out screen.
 
 		/// Constructor method used to instantiate a PostEffect object in system memory.
 		PostEffect(const Vector& pos, BITMAP* bitmap, size_t bitmapHash, int strength, float angle) :

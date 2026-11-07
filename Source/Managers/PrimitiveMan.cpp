@@ -225,12 +225,13 @@ void PrimitiveMan::DrawIconPrimitive(int player, const Vector& centerPos, Entity
 	}
 }
 
-void PrimitiveMan::DrawPrimitives(int player, BITMAP* targetBitmap, const Vector& targetPos) const {
+void PrimitiveMan::DrawPrimitives(int player, BITMAP* targetBitmap, const Vector& targetPos, float zoom) const {
 	ZoneScoped;
 
 	if (m_ScheduledPrimitives.empty()) {
 		return;
 	}
+	GraphicalPrimitive::s_DrawZoom = zoom;
 
 	int lastDrawMode = DRAW_MODE_SOLID;
 	DrawBlendMode lastBlendMode = DrawBlendMode::NoBlend;
@@ -282,4 +283,5 @@ void PrimitiveMan::DrawPrimitives(int player, BITMAP* targetBitmap, const Vector
 	glUniform4f(colorUniform, 1.0f, 1.0f, 1.0f, 1.0f);
 	rlZDepth(c_DefaultDrawDepth);
 	drawing_mode(DRAW_MODE_SOLID, nullptr, 0, 0);
+	GraphicalPrimitive::s_DrawZoom = 1.0F;
 }

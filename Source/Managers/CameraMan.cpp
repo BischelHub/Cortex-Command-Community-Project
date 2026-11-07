@@ -38,6 +38,9 @@ void CameraMan::Clear() {
 		screen.SeamCrossCount[Axes::X] = 0;
 		screen.SeamCrossCount[Axes::Y] = 0;
 		screen.ScreenShakeMagnitude = 0.0F;
+		screen.Zoom = 1.0F;
+		screen.ZoomTarget = 1.0F;
+		screen.ZoomRequest = 1.0F;
 	}
 }
 
@@ -54,7 +57,8 @@ Vector CameraMan::GetUnwrappedOffset(int screenId) const {
 
 void CameraMan::SetScroll(const Vector& center, int screenId) {
 	Screen& screen = m_Screens[screenId];
-	screen.Offset.SetXY(static_cast<float>(center.GetFloorIntX() - (g_WindowMan.GetResX() / 2)), static_cast<float>(center.GetFloorIntY() - (g_WindowMan.GetResY() / 2)));
+	float zoom = screen.Zoom;
+	screen.Offset.SetXY(static_cast<float>(center.GetFloorIntX() - static_cast<int>(static_cast<float>(g_WindowMan.GetResX() / 2) * zoom)), static_cast<float>(center.GetFloorIntY() - static_cast<int>(static_cast<float>(g_WindowMan.GetResY() / 2) * zoom)));
 	CheckOffset(screenId);
 }
 
@@ -154,6 +158,12 @@ Vector CameraMan::GetFrameSize(int screenId) {
 	frameWidth = g_FrameMan.GetPlayerFrameBufferWidth(screenId);
 	frameHeight = g_FrameMan.GetPlayerFrameBufferHeight(screenId);
 
+	float zoom = (screenId >= 0 && screenId < c_MaxScreenCount) ? m_Screens[screenId].Zoom : 1.0F;
+	if (zoom != 1.0F) {
+		frameWidth = static_cast<int>(std::ceil(static_cast<float>(frameWidth) * zoom));
+		frameHeight = static_cast<int>(std::ceil(static_cast<float>(frameHeight) * zoom));
+	}
+
 	return Vector(static_cast<float>(frameWidth), static_cast<float>(frameHeight));
 }
 
@@ -217,13 +227,16 @@ void CameraMan::Update(int screenId) {
 		}
 	}
 
+	UpdateZoom(screenId, static_cast<float>(screen.ScrollTimer.GetElapsedRealTimeS()));
+	float zoom = screen.Zoom;
+
 	Vector oldOffset(screen.Offset);
 
 	Vector offsetTarget;
-	offsetTarget.SetX(screen.ScrollTarget.GetX() - static_cast<float>(g_WindowMan.GetResX() / (g_FrameMan.GetVSplit() ? 4 : 2)));
-	offsetTarget.SetY(screen.ScrollTarget.GetY() - static_cast<float>(g_WindowMan.GetResY() / (g_FrameMan.GetHSplit() ? 4 : 2)));
+	offsetTarget.SetX(screen.ScrollTarget.GetX() - static_cast<float>(g_WindowMan.GetResX() / (g_FrameMan.GetVSplit() ? 4 : 2)) * zoom);
+	offsetTarget.SetY(screen.ScrollTarget.GetY() - static_cast<float>(g_WindowMan.GetResY() / (g_FrameMan.GetHSplit() ? 4 : 2)) * zoom);
 	// Take the occlusion of the screens into account so that the scroll target is still centered on the terrain-visible portion of the screen.
-	offsetTarget -= (screen.ScreenOcclusion / 2);
+	offsetTarget -= (screen.ScreenOcclusion / 2) * zoom;
 
 	Vector newOffset = screen.Offset;
 	if (offsetTarget.GetFloored() != screen.Offset.GetFloored()) {
@@ -258,4 +271,56 @@ void CameraMan::Update(int screenId) {
 
 	screen.DeltaOffset = screen.Offset - oldOffset;
 	screen.ScrollTimer.Reset();
+}
+
+void CameraMan::RequestZoom(float zoom, int screenId) {
+	if (screenId < 0 || screenId >= c_MaxScreenCount) {
+		return;
+	}
+	Screen& screen = m_Screens[screenId];
+	screen.ZoomRequest = std::clamp(zoom, 1.0F, c_MaxZoom);
+	screen.ZoomRequestTimer.Reset();
+}
+
+void CameraMan::UpdateZoom(int screenId, float deltaTimeS) {
+	Screen& screen = m_Screens[screenId];
+
+	float target = 1.0F;
+	if (screen.ZoomRequestTimer.GetElapsedRealTimeMS() < c_ZoomRequestLifetimeMS) {
+		target = screen.ZoomRequest;
+	}
+	// Only zoom out in the normal view, not while picking an actor, a landing zone or the like.
+	if (const Activity* activity = g_ActivityMan.GetActivity()) {
+		int player = activity->PlayerOfScreen(screenId);
+		if (player < 0 || activity->GetViewState(player) != Activity::ViewState::Normal) {
+			target = 1.0F;
+		}
+	}
+
+	Vector unzoomedSize(static_cast<float>(g_FrameMan.GetPlayerFrameBufferWidth(screenId)), static_cast<float>(g_FrameMan.GetPlayerFrameBufferHeight(screenId)));
+	// The view must not get larger than the scene along an axis it doesn't wrap around.
+	if (Scene* scene = g_SceneMan.GetScene()) {
+		if (const SLTerrain* terrain = scene->GetTerrain()) {
+			if (!terrain->WrapsX() && unzoomedSize.GetX() > 0) {
+				target = std::min(target, static_cast<float>(terrain->GetBitmap()->w) / unzoomedSize.GetX());
+			}
+			if (!terrain->WrapsY() && unzoomedSize.GetY() > 0) {
+				target = std::min(target, static_cast<float>(terrain->GetBitmap()->h) / unzoomedSize.GetY());
+			}
+		}
+	}
+	target = std::clamp(target, 1.0F, c_MaxZoom);
+	screen.ZoomTarget = target;
+
+	float oldZoom = screen.Zoom;
+	if (oldZoom == target) {
+		return;
+	}
+	float newZoom = oldZoom + (target - oldZoom) * std::min(1.0F, std::max(0.0F, deltaTimeS) * c_ZoomSpeed);
+	if (std::fabs(target - newZoom) < 0.002F) {
+		newZoom = target;
+	}
+	// Keep the middle of the view where it is.
+	screen.Offset += (unzoomedSize * oldZoom - unzoomedSize * newZoom) / 2;
+	screen.Zoom = newZoom;
 }

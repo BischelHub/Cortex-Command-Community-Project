@@ -2002,13 +2002,32 @@ void MovableMan::Draw(BITMAP* pTargetBitmap, const Vector& targetPos) {
 	}
 }
 
-void MovableMan::DrawHUD(BITMAP* pTargetBitmap, const Vector& targetPos, int which, bool playerControlled) {
+void MovableMan::DrawHUD(BITMAP* pTargetBitmap, const Vector& targetPos, int which, bool playerControlled, float zoom) {
 	ZoneScoped;
+
+	// On a zoomed out view each HUD is drawn at its own size where its object is on the view: as seen from a target position of its own that puts the object there.
+	// An actor's HUD stacks up from the top of the actor, which is nearer its middle on the smaller view, so it moves down with it; not so for the screen's own actor, whose pie menu has to stay on it.
+	Vector viewHalfSize = Vector(static_cast<float>(pTargetBitmap->w), static_cast<float>(pTargetBitmap->h)) * (zoom / 2.0F);
+	Vector viewCenter = targetPos + viewHalfSize;
+	const Actor* screensActor = nullptr;
+	if (zoom != 1.0F) {
+		if (Activity* activity = g_ActivityMan.GetActivity()) {
+			screensActor = activity->GetControlledActor(activity->PlayerOfScreen(which));
+		}
+	}
+	auto hudTargetPos = [&](const MovableObject* object, float hudTop) {
+		if (zoom == 1.0F) {
+			return targetPos;
+		}
+		const Vector& pos = object->GetPos();
+		Vector posOnView = viewHalfSize + g_SceneMan.ShortestDistance(viewCenter, pos, true);
+		return pos - posOnView / zoom - Vector(0.0F, hudTop * (1.0F - 1.0F / zoom));
+	};
 
 	// Draw HUD elements
 	for (std::deque<MovableObject*>::reverse_iterator itmIt = m_Items.rbegin(); itmIt != m_Items.rend(); ++itmIt)
-		(*itmIt)->DrawHUD(pTargetBitmap, targetPos, which);
+		(*itmIt)->DrawHUD(pTargetBitmap, hudTargetPos(*itmIt, 0.0F), which);
 
 	for (std::deque<Actor*>::reverse_iterator aIt = m_Actors.rbegin(); aIt != m_Actors.rend(); ++aIt)
-		(*aIt)->DrawHUD(pTargetBitmap, targetPos, which);
+		(*aIt)->DrawHUD(pTargetBitmap, hudTargetPos(*aIt, *aIt == screensActor ? 0.0F : (*aIt)->GetHeight() / 2.0F), which);
 }

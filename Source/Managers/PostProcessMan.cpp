@@ -151,7 +151,7 @@ void PostProcessMan::AdjustEffectsPosToPlayerScreen(int playerScreen, BITMAP* ta
 	for (const PostEffect& postEffect: screenRelativeEffectsList) {
 		// Make sure we won't be adding any effects to a part of the screen that is occluded by menus and such
 		if (postEffect.m_Pos.GetFloorIntX() > screenOcclusionOffsetX && postEffect.m_Pos.GetFloorIntY() > screenOcclusionOffsetY && postEffect.m_Pos.GetFloorIntX() < occludedOffsetX && postEffect.m_Pos.GetFloorIntY() < occludedOffsetY) {
-			m_PostScreenEffects.emplace_back(postEffect.m_Pos + targetBitmapOffset, postEffect.m_Bitmap, postEffect.m_BitmapHash, postEffect.m_Strength, postEffect.m_Angle);
+			m_PostScreenEffects.emplace_back(postEffect.m_Pos + targetBitmapOffset, postEffect.m_Bitmap, postEffect.m_BitmapHash, postEffect.m_Strength, postEffect.m_Angle).m_Scale = postEffect.m_Scale;
 		}
 	}
 	// Adjust glow areas for the player screen's position on the final buffer
@@ -424,11 +424,12 @@ void PostProcessMan::DrawPostScreenEffects() {
 			effectStrength = postEffect.m_Strength;
 			effectPosX = postEffect.m_Pos.GetFloorIntX();
 			effectPosY = postEffect.m_Pos.GetFloorIntY();
+			float effectScale = postEffect.m_Scale;
 			DrawTexturePro(
 			    g_GLResourceMan.GetStaticTextureFromBitmap(postEffect.m_Bitmap),
 			    Rectangle(0, 0, postEffect.m_Bitmap->w, postEffect.m_Bitmap->h),
-			    Rectangle(effectPosX, effectPosY, postEffect.m_Bitmap->w, postEffect.m_Bitmap->h),
-				Vector2(postEffect.m_Bitmap->w / 2, postEffect.m_Bitmap->h / 2),
+			    Rectangle(effectPosX, effectPosY, postEffect.m_Bitmap->w * effectScale, postEffect.m_Bitmap->h * effectScale),
+				Vector2(postEffect.m_Bitmap->w * effectScale / 2, postEffect.m_Bitmap->h * effectScale / 2),
 			    postEffect.m_Angle,
 			    {.r=effectStrength, .g=effectStrength, .b=effectStrength, .a=255});
 		}

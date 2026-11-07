@@ -937,7 +937,12 @@ namespace RTE {
 		/// Draws this SceneMan's current graphical representation to a BITMAP of choice.
 		/// @param targetBitmap A pointer to a BITMAP to draw on, appropriately sized for the split screen segment.
 		/// @param targetGUIBitmap The offset into the scene where the target bitmap's upper left corner is located.
-		void Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos = Vector(), bool skipBackgroundLayers = false, bool skipTerrain = false);
+		/// @param zoom How far the view is zoomed out: scene pixels per pixel of the target bitmap. The scene is drawn this much smaller, the background layers and the HUD at their own size. (default: 1)
+		void Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos = Vector(), bool skipBackgroundLayers = false, bool skipTerrain = false, float zoom = 1.0F);
+
+		/// Gets the zoom of the Draw call going on right now, 1 outside of one. HUD and GUI drawing uses it to place what it draws over the scene.
+		/// @return The zoom of the current Draw call.
+		float GetDrawZoom() const { return m_DrawZoom; }
 
 		/// Clears the color MO layer. Should be done every frame.
 		void ClearMOColorLayer();
@@ -1011,6 +1016,7 @@ namespace RTE {
 
 		// The last screen everything has been updated to
 		int m_LastUpdatedScreen;
+		float m_DrawZoom = 1.0F; //!< The zoom of the Draw call going on right now, 1 outside of one.
 		// Whether we're in second pass of the structural computations.
 		// Second pass is where structurally unsound areas of the Terrain are turned into
 		// MovableObject:s.

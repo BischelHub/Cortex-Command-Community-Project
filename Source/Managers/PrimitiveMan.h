@@ -28,7 +28,8 @@ namespace RTE {
 		/// @param player Player to draw for.
 		/// @param targetBitmap Bitmap to draw on.
 		/// @param targetPos Position to draw.
-		void DrawPrimitives(int player, BITMAP* targetBitmap, const Vector& targetPos) const;
+		/// @param zoom How far the view is zoomed out (scene pixels per pixel of the target bitmap); the caller has scaled the drawing down by it already. (default: 1)
+		void DrawPrimitives(int player, BITMAP* targetBitmap, const Vector& targetPos, float zoom = 1.0F) const;
 #pragma endregion
 
 #pragma region Primitive Draw Scheduling

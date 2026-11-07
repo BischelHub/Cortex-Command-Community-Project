@@ -1846,7 +1846,10 @@ void GameActivity::DrawGUI(BITMAP* pTargetBitmap, const Vector& targetPos, int w
 	int PoS = PlayerOfScreen(which);
 	if (PoS < Players::PlayerOne || PoS >= Players::MaxPlayerCount)
 		return;
-	Box screenBox(targetPos, pTargetBitmap->w, pTargetBitmap->h);
+	// On a zoomed out view the scene shows smaller (SceneMan::Draw); markers over it keep their size but go where their spot on the scene is.
+	float zoom = g_SceneMan.GetDrawZoom();
+	auto onView = [&targetPos, zoom](const Vector& scenePos) { return (scenePos - targetPos) / zoom; };
+	Box screenBox(targetPos, static_cast<float>(pTargetBitmap->w) * zoom, static_cast<float>(pTargetBitmap->h) * zoom);
 	GUIFont* pLargeFont = g_FrameMan.GetLargeFont();
 	GUIFont* pSmallFont = g_FrameMan.GetSmallFont();
 	AllegroBitmap pBitmapInt(pTargetBitmap);
@@ -1895,7 +1898,7 @@ void GameActivity::DrawGUI(BITMAP* pTargetBitmap, const Vector& targetPos, int w
 		cursor = team;
 		for (std::deque<Delivery>::iterator itr = m_Deliveries[team].begin(); itr != m_Deliveries[team].end(); ++itr) {
 			int halfWidth = 24;
-			landZone = itr->landingZone - targetPos;
+			landZone = onView(itr->landingZone);
 			bool anyPlayerOnTeamIsInLandingZoneSelectViewState = false;
 			for (int player = Players::PlayerOne; player < Players::MaxPlayerCount; ++player) {
 				if (GetTeamOfPlayer(player) == team && m_ViewState[player] == ViewState::LandingZoneSelect) {
@@ -1948,7 +1951,7 @@ void GameActivity::DrawGUI(BITMAP* pTargetBitmap, const Vector& targetPos, int w
 	float halfScreenWidth = pTargetBitmap->w / 2;
 	float halfScreenHeight = pTargetBitmap->h / 2;
 	// THis is the max distance that is possible between a point inside the scene, but outside the screen box, and the screen box's outer edge closest to the point (taking wrapping into account)
-	float maxOffScreenSceneWidth = g_SceneMan.SceneWrapsX() ? ((sceneWidth / 2) - halfScreenWidth) : (sceneWidth - pTargetBitmap->w);
+	float maxOffScreenSceneWidth = g_SceneMan.SceneWrapsX() ? ((sceneWidth / 2) - halfScreenWidth * zoom) : (sceneWidth - pTargetBitmap->w * zoom);
 	// These handle arranging the left and right stacks of arrows, so they don't pile up on top of each other
 	cursor = team;
 	float leftStackY = halfScreenHeight - m_aObjCursor[cursor][frame]->h * 2;
@@ -1985,18 +1988,18 @@ void GameActivity::DrawGUI(BITMAP* pTargetBitmap, const Vector& targetPos, int w
 
 			// Objective is within the screen, so draw the set arrow over it
 			if (withinAny)
-				itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], objScenePos - targetPos, itr->m_ArrowDir);
+				itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], onView(objScenePos), itr->m_ArrowDir);
 			// Outside the screen, so draw it at the edge of it
 			else {
 				// Figure out which point is closest to the box, taking scene wrapping into account
 				objScenePos = nearestBoxItr->GetCenter() + g_SceneMan.ShortestDistance(nearestBoxItr->GetCenter(), objScenePos);
 				// Shortest distance from the edge of the screen box, not the center.
-				shortestDist -= halfScreenWidth;
+				shortestDist -= halfScreenWidth * zoom;
 
 				// Make the arrow point toward the edge of the screen
 				if (objScenePos.m_X >= nearestBoxItr->GetCorner().m_X + nearestBoxItr->GetWidth()) {
 					// Make the edge position approach the center of the vertical edge of the screen the farther away the objective position is from the screen
-					onScreenEdgePos = nearestBoxItr->GetWithinBox(objScenePos) - targetPos;
+					onScreenEdgePos = onView(nearestBoxItr->GetWithinBox(objScenePos));
 					// Double the EaseIn to make it even more exponential, want the arrow to stay close to the edge for a long time
 					onScreenEdgePos.m_Y = rightStackY + EaseIn(0, onScreenEdgePos.m_Y - rightStackY, EaseIn(0, 1.0, 1.0 - (shortestDist / maxOffScreenSceneWidth)));
 					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], onScreenEdgePos, ARROWRIGHT);
@@ -2004,16 +2007,16 @@ void GameActivity::DrawGUI(BITMAP* pTargetBitmap, const Vector& targetPos, int w
 					rightStackY += m_aObjCursor[cursor][frame]->h;
 				} else if (objScenePos.m_X < nearestBoxItr->GetCorner().m_X) {
 					// Make the edge position approach the center of the vertical edge of the screen the farther away the objective position is from the screen
-					onScreenEdgePos = nearestBoxItr->GetWithinBox(objScenePos) - targetPos;
+					onScreenEdgePos = onView(nearestBoxItr->GetWithinBox(objScenePos));
 					// Double the EaseIn to make it even more exponential, want the arrow to stay close to the edge for a long time
 					onScreenEdgePos.m_Y = leftStackY + EaseIn(0, onScreenEdgePos.m_Y - leftStackY, EaseIn(0, 1.0, 1.0 - (shortestDist / maxOffScreenSceneWidth)));
 					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], onScreenEdgePos, ARROWLEFT);
 					// Stack cursor moves down an arrowheight
 					leftStackY += m_aObjCursor[cursor][frame]->h;
 				} else if (objScenePos.m_Y < nearestBoxItr->GetCorner().m_Y)
-					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], nearestBoxItr->GetWithinBox(objScenePos) - targetPos, ARROWUP);
+					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], onView(nearestBoxItr->GetWithinBox(objScenePos)), ARROWUP);
 				else
-					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], nearestBoxItr->GetWithinBox(objScenePos) - targetPos, ARROWDOWN);
+					itr->Draw(pTargetBitmap, m_aObjCursor[cursor][frame], onView(nearestBoxItr->GetWithinBox(objScenePos)), ARROWDOWN);
 			}
 		}
 	}

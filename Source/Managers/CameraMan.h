@@ -107,10 +107,28 @@ namespace RTE {
 		/// @param screenId Which screen you want to check the offset of.
 		void CheckOffset(int screenId = 0);
 
-		/// Gets the frame width/height for a given screen.
+		/// Gets the frame width/height for a given screen, that is the size of the part of the scene it shows. With a zoom above 1 that is larger than the screen itself.
 		/// @param screenId Which screen you want to get frame width/height of.
 		/// @return The frame width (x) and height (y).
 		Vector GetFrameSize(int screenId = 0);
+#pragma endregion
+
+#pragma region Zoom
+		/// Gets how far a screen is zoomed out right now: how many scene pixels one screen pixel shows. 1 is no zoom.
+		/// @param screenId Which screen you want the zoom of.
+		/// @return The current zoom of the screen.
+		float GetZoom(int screenId = 0) const { return (screenId >= 0 && screenId < c_MaxScreenCount) ? m_Screens[screenId].Zoom : 1.0F; }
+
+		/// Gets the zoom a screen is heading for.
+		/// @param screenId Which screen you want the zoom target of.
+		/// @return The zoom the screen is heading for.
+		float GetZoomTarget(int screenId = 0) const { return (screenId >= 0 && screenId < c_MaxScreenCount) ? m_Screens[screenId].ZoomTarget : 1.0F; }
+
+		/// Asks a screen to zoom out to the given zoom, smoothly. A request lasts only a moment (c_ZoomRequestLifetimeMS), so it has to be repeated every frame for as long as the zoom should hold; after that the screen zooms back in to 1.
+		/// The zoom is limited to c_MaxZoom, and to what still fits into the scene along an axis it doesn't wrap around. It is only used while the screen's player is in the normal view.
+		/// @param zoom The zoom wanted, 1 being none.
+		/// @param screenId Which screen should zoom.
+		void RequestZoom(float zoom, int screenId = 0);
 #pragma endregion
 
 #pragma region Screen Shake Getters and Setters
@@ -176,6 +194,15 @@ namespace RTE {
 #pragma endregion
 
 	private:
+		static constexpr float c_MaxZoom = 3.0F; //!< The farthest a screen can zoom out.
+		static constexpr double c_ZoomRequestLifetimeMS = 250.0; //!< How long a zoom request holds, in real time.
+		static constexpr float c_ZoomSpeed = 5.0F; //!< How fast the zoom follows its target, per second.
+
+		/// Moves the zoom of a screen towards its target, keeping the middle of the view where it is.
+		/// @param screenId Which screen.
+		/// @param deltaTimeS The real time since the last update, in seconds.
+		void UpdateZoom(int screenId, float deltaTimeS);
+
 		/// A screen. Each player should have one of these.
 		/// TODO: This is a struct right now, as it has been torn verbatim out of SceneMan. In future it should be a proper class with methods, instead of CameraMan handling everything.
 		struct Screen {
@@ -196,6 +223,10 @@ namespace RTE {
 			Vector ScreenOcclusion; //!< The amount a screen is occluded or covered by GUI, etc.
 
 			float ScreenShakeMagnitude = 0; //!< The magnitude of screen shake that is currently being applied.
+			float Zoom = 1.0F; //!< How far the screen is zoomed out right now: scene pixels per screen pixel.
+			float ZoomTarget = 1.0F; //!< The zoom the screen is heading for.
+			float ZoomRequest = 1.0F; //!< The zoom last asked for by RequestZoom.
+			Timer ZoomRequestTimer; //!< Time since the zoom was last asked for.
 		};
 
 		float m_ScreenShakeStrength; //!< A global multiplier applied to screen shaking strength.
