@@ -1,6 +1,7 @@
 name: Zoom Windows Build
 
-# Builds the Windows executable of the zoom branch and keeps it as a build artefact.
+# Builds the Windows executable of the zoom branch, keeps it as a build artefact and also commits it to the branch
+# zoom-exe, so it can be fetched with git.
 on:
   push:
     branches: [zoom]
@@ -12,3 +13,25 @@ jobs:
     with:
       upload_artefacts: true
       build_configuration: "Debug Release"
+
+  publish:
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Cortex Command.debug.release
+          path: exe
+
+      - name: Commit the executable to zoom-exe
+        working-directory: exe
+        run: |
+          ls -la
+          git init -q -b zoom-exe
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Windows executable of zoom ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" zoom-exe
