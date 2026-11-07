@@ -1,0 +1,14 @@
+name: Zoom Windows Build
+
+# Builds the Windows executable of the zoom branch and keeps it as a build artefact.
+on:
+  push:
+    branches: [zoom]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    uses: ./.github/workflows/msbuild.yml
+    with:
+      upload_artefacts: true
+      build_configuration: "Debug Release"
