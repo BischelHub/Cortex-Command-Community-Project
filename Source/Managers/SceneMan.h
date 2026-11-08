@@ -938,7 +938,14 @@ namespace RTE {
 		/// @param targetBitmap A pointer to a BITMAP to draw on, appropriately sized for the split screen segment.
 		/// @param targetGUIBitmap The offset into the scene where the target bitmap's upper left corner is located.
 		/// @param zoom How far the view is zoomed out: scene pixels per pixel of the target bitmap. The scene is drawn this much smaller, the background layers and the HUD at their own size. (default: 1)
-		void Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos = Vector(), bool skipBackgroundLayers = false, bool skipTerrain = false, float zoom = 1.0F);
+		/// @param skipHUD Whether to leave out the HUDs and the activity's GUI. (default: false)
+		void Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos = Vector(), bool skipBackgroundLayers = false, bool skipTerrain = false, float zoom = 1.0F, bool skipHUD = false);
+
+		/// Lines the layers up with a view of the scene other than a screen's own, for an inset view. SceneMan::Update lines them up with the screen again.
+		/// @param offset The upper left corner of the view in the scene.
+		/// @param unwrappedOffset The same, without taking wrapping into account (for the background layers, see CameraMan::GetUnwrappedOffset).
+		/// @param screenId The screen the view is shown on, for its team's unseen layer.
+		void SetViewOffset(const Vector& offset, const Vector& unwrappedOffset, int screenId);
 
 		/// Gets the zoom of the Draw call going on right now, 1 outside of one. HUD and GUI drawing uses it to place what it draws over the scene.
 		/// @return The zoom of the current Draw call.

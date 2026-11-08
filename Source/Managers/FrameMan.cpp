@@ -886,6 +886,8 @@ void FrameMan::Draw() {
 			rlLoadIdentity();
 		}
 
+		bool drawInsetView = DrawInsetView(playerScreen, drawScreenGUI);
+
 		// Get only the scene-relative post effects that affect this player's screen
 		if (pActivity) {
 			g_PostProcessMan.GetPostScreenEffectsWrapped(targetPos, viewWidth, viewHeight, screenRelativeEffects, pActivity->GetTeamOfPlayer(pActivity->PlayerOfScreen(playerScreen)));
@@ -923,6 +925,9 @@ void FrameMan::Draw() {
 		blit(drawScreen, m_BackBuffer8.get(), 0, 0, screenOffset.GetFloorIntX(), screenOffset.GetFloorIntY(), drawScreen->w, drawScreen->h);
 		m_PlayerScreen->End();
 		backgroundShader.End();
+		if (drawInsetView) {
+			DrawInsetViewOnScreen(drawScreenGUI);
+		}
 		if (screenCount > 1) {
 			m_BackBuffer->Begin(false);
 			DrawTextureRec(m_PlayerScreen->GetColorTexture(), {0, 0, static_cast<float>(m_PlayerScreen8->w), -static_cast<float>(m_PlayerScreen8->h)}, {screenOffset.m_X, screenOffset.m_Y}, {255, 255, 255, 255});
@@ -968,6 +973,90 @@ void FrameMan::Draw() {
 	// Draw scene seam
 	vline(m_BackBuffer8.get(), 0, 0, g_SceneMan.GetSceneHeight(), 5);
 #endif
+}
+
+Box FrameMan::GetInsetViewBox(int screenWidth, int screenHeight) const {
+	// A third of the screen's width or so, as wide as tall as the screen, in the upper right corner.
+	int width = std::max(64, static_cast<int>(std::round(static_cast<float>(screenWidth) * 0.32F)));
+	int height = std::max(36, static_cast<int>(std::round(static_cast<float>(width * screenHeight) / static_cast<float>(std::max(1, screenWidth)))));
+	// Clear of the icons in the very corner.
+	int margin = 6;
+	int top = 22;
+	return Box(Vector(static_cast<float>(screenWidth - width - margin), static_cast<float>(top)), static_cast<float>(width), static_cast<float>(height));
+}
+
+bool FrameMan::DrawInsetView(int playerScreen, BITMAP* drawScreenGUI) {
+	Vector center;
+	float insetZoom = 1.0F;
+	std::string label;
+	if (!g_SceneMan.GetScene() || !g_CameraMan.GetInsetView(playerScreen, center, insetZoom, label)) {
+		return false;
+	}
+	Box insetBox = GetInsetViewBox(drawScreenGUI->w, drawScreenGUI->h);
+	int width = static_cast<int>(insetBox.GetWidth());
+	int height = static_cast<int>(insetBox.GetHeight());
+	if (!m_InsetScreen8 || m_InsetScreen8->w != width || m_InsetScreen8->h != height) {
+		m_InsetScreen8 = std::shared_ptr<BITMAP>(create_bitmap_ex(8, width, height), BitmapDeleter());
+		m_InsetScreen = std::make_unique<RenderTarget>(FloatRect(0, 0, width, height), FloatRect(0, 0, width, height));
+	}
+
+	// The part of the scene it shows: around the point, but within the scene along an axis it doesn't wrap around.
+	Vector viewSize = Vector(static_cast<float>(width), static_cast<float>(height)) * insetZoom;
+	Vector offset = center - viewSize / 2;
+	float sceneWidth = static_cast<float>(g_SceneMan.GetSceneWidth());
+	float sceneHeight = static_cast<float>(g_SceneMan.GetSceneHeight());
+	if (g_SceneMan.SceneWrapsX()) {
+		offset.m_X = std::fmod(std::fmod(offset.m_X, sceneWidth) + sceneWidth, sceneWidth);
+	} else {
+		offset.m_X = std::clamp(offset.m_X, 0.0F, std::max(0.0F, sceneWidth - viewSize.m_X));
+	}
+	if (g_SceneMan.SceneWrapsY()) {
+		offset.m_Y = std::fmod(std::fmod(offset.m_Y, sceneHeight) + sceneHeight, sceneHeight);
+	} else {
+		offset.m_Y = std::clamp(offset.m_Y, 0.0F, std::max(0.0F, sceneHeight - viewSize.m_Y));
+	}
+	offset.SetXY(std::floor(offset.m_X), std::floor(offset.m_Y));
+	Vector unwrappedOffset = g_CameraMan.GetUnwrappedOffset(playerScreen) + g_SceneMan.ShortestDistance(g_CameraMan.GetOffset(playerScreen), offset, false);
+
+	m_PlayerScreen->End();
+	m_InsetScreen->Begin(true, 1.0f);
+	clear_to_color(m_InsetScreen8.get(), ColorKeys::g_MaskColor);
+	g_SceneMan.SetViewOffset(offset, unwrappedOffset, playerScreen);
+	g_SceneMan.Draw(m_InsetScreen8.get(), m_InsetScreen8.get(), offset, false, false, insetZoom, true);
+	if (insetZoom != 1.0F) {
+		rlDrawRenderBatchActive();
+		rlScalef(1.0F / insetZoom, 1.0F / insetZoom, 1.0F);
+	}
+	g_PrimitiveMan.DrawPrimitives(playerScreen, m_InsetScreen8.get(), offset, insetZoom);
+	if (insetZoom != 1.0F) {
+		rlDrawRenderBatchActive();
+		rlLoadIdentity();
+	}
+	m_InsetScreen->End();
+	m_PlayerScreen->Begin(false, 1.0f);
+
+	if (!label.empty()) {
+		AllegroBitmap guiBitmap(drawScreenGUI);
+		GetSmallFont()->DrawAligned(&guiBitmap, insetBox.GetCorner().GetFloorIntX() + 4, insetBox.GetCorner().GetFloorIntY() + 3, label, GUIFont::Left);
+	}
+	return true;
+}
+
+void FrameMan::DrawInsetViewOnScreen(BITMAP* drawScreenGUI) {
+	Box insetBox = GetInsetViewBox(drawScreenGUI->w, drawScreenGUI->h);
+	float x = insetBox.GetCorner().GetX();
+	float y = insetBox.GetCorner().GetY();
+	float width = insetBox.GetWidth();
+	float height = insetBox.GetHeight();
+
+	m_PlayerScreen->Begin(false, 1.0f);
+	rlDisableDepthTest();
+	DrawRectangle(static_cast<int>(x) - 2, static_cast<int>(y) - 2, static_cast<int>(width) + 4, static_cast<int>(height) + 4, {16, 16, 16, 255});
+	DrawTextureRec(m_InsetScreen->GetColorTexture(), {0, 0, width, -height}, {x, y}, {255, 255, 255, 255});
+	DrawRectangleLines(static_cast<int>(x) - 1, static_cast<int>(y) - 1, static_cast<int>(width) + 2, static_cast<int>(height) + 2, {190, 160, 70, 255});
+	rlDrawRenderBatchActive();
+	rlEnableDepthTest();
+	m_PlayerScreen->End();
 }
 
 void FrameMan::DrawScreenText(int playerScreen, AllegroBitmap playerGUIBitmap) {

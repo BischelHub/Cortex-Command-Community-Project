@@ -369,6 +369,8 @@ namespace RTE {
 		std::unique_ptr<BITMAP, BitmapDeleter> m_ScreenDumpNamePlaceholder; //!< Dummy BITMAP for keeping naming continuity when saving ScreenDumps with multi-threading.
 
 		std::shared_ptr<RenderTarget> m_BackBuffer; //!< Main render backbuffer.
+		std::unique_ptr<RenderTarget> m_InsetScreen; //!< What the inset view of the screen being drawn shows (CameraMan::RequestInsetView).
+		std::shared_ptr<BITMAP> m_InsetScreen8; //!< 8bpp bitmap the size of the inset view, for the parts of drawing that need one.
 
 #pragma region Initialize Breakdown
 		/// Creates all the frame buffer bitmaps to be used by FrameMan. This is called during Initialize().
@@ -389,6 +391,23 @@ namespace RTE {
 		/// @param playerScreen The player screen the text will be shown on.
 		/// @param playerGUIBitmap The bitmap the text will be drawn on.
 		void DrawScreenText(int playerScreen, AllegroBitmap playerGUIBitmap);
+
+		/// Draws what a screen's inset view shows into m_InsetScreen, and its label onto the screen's GUI bitmap, if the screen has one right now (CameraMan::RequestInsetView). Leaves the scene layers lined up with the inset view.
+		/// The screen's render target is ended for it and begun again afterwards.
+		/// @param playerScreen The screen.
+		/// @param drawScreenGUI The screen's GUI bitmap.
+		/// @return Whether there is an inset view, to be put on the screen with DrawInsetViewOnScreen.
+		bool DrawInsetView(int playerScreen, BITMAP* drawScreenGUI);
+
+		/// Puts the inset view DrawInsetView drew into the upper right corner of the screen's render target, with a frame. Needs the background shader ended.
+		/// @param drawScreenGUI The screen's GUI bitmap, for the screen's size.
+		void DrawInsetViewOnScreen(BITMAP* drawScreenGUI);
+
+		/// Gets the upper left corner of the inset view on a screen of the given size, and its size.
+		/// @param screenWidth The width of the screen.
+		/// @param screenHeight The height of the screen.
+		/// @return The inset view's box on the screen.
+		Box GetInsetViewBox(int screenWidth, int screenHeight) const;
 
 		/// Draws the screen flash effect to the specified player screen with parameters set by FlashScreen(). This is called during Draw().
 		/// @param playerScreen The player screen the flash effect will be shown to.

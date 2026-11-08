@@ -41,6 +41,7 @@ void CameraMan::Clear() {
 		screen.Zoom = 1.0F;
 		screen.ZoomTarget = 1.0F;
 		screen.ZoomRequest = 1.0F;
+		screen.InsetRequested = false;
 	}
 }
 
@@ -323,4 +324,36 @@ void CameraMan::UpdateZoom(int screenId, float deltaTimeS) {
 	// Keep the middle of the view where it is.
 	screen.Offset += (unzoomedSize * oldZoom - unzoomedSize * newZoom) / 2;
 	screen.Zoom = newZoom;
+}
+
+void CameraMan::RequestInsetView(const Vector& center, float zoom, const std::string& label, int screenId) {
+	if (screenId < 0 || screenId >= c_MaxScreenCount) {
+		return;
+	}
+	Screen& screen = m_Screens[screenId];
+	screen.InsetRequested = true;
+	screen.InsetCenter = center;
+	screen.InsetZoom = std::clamp(zoom, 1.0F, c_MaxZoom);
+	screen.InsetLabel = label;
+	screen.InsetRequestTimer.Reset();
+}
+
+bool CameraMan::GetInsetView(int screenId, Vector& center, float& zoom, std::string& label) const {
+	if (screenId < 0 || screenId >= c_MaxScreenCount) {
+		return false;
+	}
+	const Screen& screen = m_Screens[screenId];
+	if (!screen.InsetRequested || screen.InsetRequestTimer.GetElapsedRealTimeMS() >= c_ZoomRequestLifetimeMS) {
+		return false;
+	}
+	if (const Activity* activity = g_ActivityMan.GetActivity()) {
+		int player = activity->PlayerOfScreen(screenId);
+		if (player < 0 || activity->GetViewState(player) != Activity::ViewState::Normal) {
+			return false;
+		}
+	}
+	center = screen.InsetCenter;
+	zoom = screen.InsetZoom;
+	label = screen.InsetLabel;
+	return true;
 }

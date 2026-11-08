@@ -5,6 +5,7 @@
 #include "Vector.h"
 
 #include <array>
+#include <string>
 
 #define g_CameraMan CameraMan::Instance()
 
@@ -131,6 +132,23 @@ namespace RTE {
 		void RequestZoom(float zoom, int screenId = 0);
 #pragma endregion
 
+#pragma region Inset View
+		/// Asks for an inset view on a screen: a small picture in its upper right corner that shows the scene around a point. Like a zoom request it lasts only a moment (c_ZoomRequestLifetimeMS) and has to be repeated every frame; it only shows while the screen's player is in the normal view.
+		/// @param center The point of the scene the inset view is centered on.
+		/// @param zoom How far the inset view is zoomed out, 1 being none (limited to 1 to c_MaxZoom).
+		/// @param label A short text shown at the top of the inset view, or empty for none.
+		/// @param screenId Which screen should show it.
+		void RequestInsetView(const Vector& center, float zoom, const std::string& label, int screenId = 0);
+
+		/// Gets the inset view a screen should show right now, if any.
+		/// @param screenId Which screen.
+		/// @param center Set to the point of the scene the inset view is centered on.
+		/// @param zoom Set to how far the inset view is zoomed out.
+		/// @param label Set to the text to show at its top.
+		/// @return Whether the screen should show an inset view.
+		bool GetInsetView(int screenId, Vector& center, float& zoom, std::string& label) const;
+#pragma endregion
+
 #pragma region Screen Shake Getters and Setters
 		/// Gets the screen shake strength multiplier.
 		/// @return The screen shake strength multiplier.
@@ -227,6 +245,11 @@ namespace RTE {
 			float ZoomTarget = 1.0F; //!< The zoom the screen is heading for.
 			float ZoomRequest = 1.0F; //!< The zoom last asked for by RequestZoom.
 			Timer ZoomRequestTimer; //!< Time since the zoom was last asked for.
+			bool InsetRequested = false; //!< Whether an inset view was ever asked for.
+			Vector InsetCenter; //!< The point of the scene the inset view is centered on.
+			float InsetZoom = 1.0F; //!< How far the inset view is zoomed out.
+			std::string InsetLabel; //!< The text at the top of the inset view.
+			Timer InsetRequestTimer; //!< Time since the inset view was last asked for.
 		};
 
 		float m_ScreenShakeStrength; //!< A global multiplier applied to screen shaking strength.

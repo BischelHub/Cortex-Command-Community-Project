@@ -2581,7 +2581,27 @@ void SceneMan::Update(int screenId) {
 	}
 }
 
-void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos, bool skipBackgroundLayers, bool skipTerrain, float zoom) {
+void SceneMan::SetViewOffset(const Vector& offset, const Vector& unwrappedOffset, int screenId) {
+	if (!m_pCurrentScene) {
+		return;
+	}
+	m_pMOColorLayer->SetOffset(offset);
+	if (m_pDebugLayer) {
+		m_pDebugLayer->SetOffset(offset);
+	}
+	SLTerrain* terrain = m_pCurrentScene->GetTerrain();
+	terrain->SetOffset(offset);
+	terrain->Update();
+	for (SLBackground* backgroundLayer: m_pCurrentScene->GetBackLayers()) {
+		backgroundLayer->SetOffset(unwrappedOffset);
+	}
+	const int teamId = g_CameraMan.GetScreenTeam(screenId);
+	if (SceneLayer* unseenLayer = (teamId != Activity::NoTeam) ? m_pCurrentScene->GetUnseenLayer(teamId) : nullptr) {
+		unseenLayer->SetOffset(offset);
+	}
+}
+
+void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector& targetPos, bool skipBackgroundLayers, bool skipTerrain, float zoom, bool skipHUD) {
 	ZoneScoped;
 
 	if (!m_pCurrentScene) {
@@ -2657,7 +2677,7 @@ void SceneMan::Draw(BITMAP* targetBitmap, BITMAP* targetGUIBitmap, const Vector&
 			}
 			endZoom();
 
-			bool shouldDrawHUD = !g_FrameMan.IsHudDisabled(m_LastUpdatedScreen);
+			bool shouldDrawHUD = !skipHUD && !g_FrameMan.IsHudDisabled(m_LastUpdatedScreen);
 			if (shouldDrawHUD) {
 				g_MovableMan.DrawHUD(targetGUIBitmap, targetPos, m_LastUpdatedScreen, false, zoom);
 			}
